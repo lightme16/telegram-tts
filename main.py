@@ -11,7 +11,7 @@ from langdetect.language import Language
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-LANGS_PRIORITY = ["en", "ru", "uk"]
+LANGS_PRIORITY = ["en", "ru", "uk", "mk"]
 
 
 def parse_config_ini():
@@ -43,7 +43,7 @@ def remove_unicode(txt: str) -> str:
 
 @app.on_message(filters.all)
 def message_handler(client: Client, message: Message) -> None:
-    chat_title = message.chat.title
+    chat_title = message.chat.title.lower()
     if chat_title not in channels:
         return
     options: Optional[dict] = channels.get(chat_title, {})
@@ -107,6 +107,9 @@ def detect_lang(txt: str) -> str:
     langs = [l for l in langs if l.lang in LANGS_PRIORITY]
     if langs:
         lang = langs[0].lang
+    # FIXME: workaround against match errors
+    if lang == "mk":
+        lang = "ru"
     return lang
 
 
@@ -118,7 +121,7 @@ def play(sender: str, lang: str, message_id: int, txt: str) -> None:
     file = f"{message_id}.mp3"
     tts.save(file)
     os.system(
-        f"ffplay -autoexit -nodisp -af atempo=2 -loglevel error {file} && rm {file}"
+        f"ffmpeg -loglevel error -i {file} -filter:a 'atempo=2' -f matroska - | ffplay -autoexit -nodisp -loglevel error - && rm {file}"
     )
 
 

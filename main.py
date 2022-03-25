@@ -1,5 +1,6 @@
 import configparser
 import os
+import re
 
 from gtts import gTTS
 from langdetect import detect_langs
@@ -31,28 +32,36 @@ print(f"Channels: {channels}")
 app = Client("tts-feed")
 
 
+def remove_unicode(txt: str) -> str:
+    return txt.encode("ascii", "ignore").decode("ascii")
+
+
 @app.on_message(filters.all)
 def message_handler(client: Client, message: Message) -> None:
     chat_title = message.chat.title
     if chat_title not in channels:
         return
-    from_user, lang, txt = parse(message)
-    play(from_user, lang, message, txt)
+    sender, lang, txt = parse(message)
+    play(sender, lang, message, txt)
 
 
 def parse(message: Message) -> (str, str, str):
-    chat_title = message.chat.title
+    chat_title = deEmojify(message.chat.title)
     if message.from_user:
-        from_user = " ".join(
-            [n for n in [message.from_user.first_name, message.from_user.last_name] if n]
+        sender = " ".join(
+            [
+                n
+                for n in [message.from_user.first_name, message.from_user.last_name]
+                if n
+            ]
         )
     else:
-        from_user = "Unknown"
+        sender = "Unknown"
 
     if message.forward_from_chat:
         txt = message.caption or message.text
         lang = detect_lang(txt)
-        from_user = f"forwared from {message.forward_from_chat.title}"
+        sender = f"forwared from {message.forward_from_chat.title}"
     elif message.media:
         txt = " ".join([n for n in [message.media, message.caption] if n])
         lang = detect_lang(txt)
@@ -63,7 +72,21 @@ def parse(message: Message) -> (str, str, str):
         lang = detect_lang(txt)
 
     txt = f"{chat_title}      {txt}"
-    return from_user, lang, txt
+    sender = deEmojify(sender)
+    return sender, lang, txt
+
+
+def deEmojify(text: str) -> str:
+    regrex_pattern = re.compile(
+        pattern="["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "]+",
+        flags=re.UNICODE,
+    )
+    return regrex_pattern.sub(r"", text).strip()
 
 
 def detect_lang(txt):
@@ -77,9 +100,9 @@ def detect_lang(txt):
     return lang
 
 
-def play(from_user: str, lang: str, message: Message, txt: str) -> None:
-    print(f"from user: {from_user}, lang: {lang} text: {txt}")
-    tts = gTTS(f"{from_user}: {txt}", lang=lang)
+def play(sender: str, lang: str, message: Message, txt: str) -> None:
+    print(f"sender: {sender}, lang: {lang} text: {txt}")
+    tts = gTTS(f"{sender}: {txt}", lang=lang)
     file = f"{message.message_id}.mp3"
     tts.save(file)
     os.system(

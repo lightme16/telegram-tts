@@ -43,8 +43,9 @@ def remove_unicode(txt: str) -> str:
 
 @app.on_message(filters.all)
 def message_handler(client: Client, message: Message) -> None:
-    chat_title = message.chat.title.lower()
-    if chat_title not in channels:
+    chat_title =  message.chat.title and message.chat.title.lower()
+    user = message.chat.username and message.chat.username.lower()
+    if chat_title not in channels and user not in channels:
         return
     options: Optional[dict] = channels.get(chat_title, {})
     if options.get("enabled") is not False:
@@ -93,7 +94,7 @@ def deEmojify(text: str) -> str:
                 "]+",
         flags=re.UNICODE,
     )
-    return regrex_pattern.sub(r"", text).strip()
+    return regrex_pattern.sub(r"", str(text)).strip()
 
 
 def detect_lang(txt: str) -> str:

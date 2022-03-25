@@ -1,0 +1,4 @@
+*.session
+*.mp3
+*.ini
+.vscode/

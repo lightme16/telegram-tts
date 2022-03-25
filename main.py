@@ -1,7 +1,9 @@
 import configparser
 import functools
+import json
 import os
 import re
+from typing import Optional, Any
 
 from gtts import gTTS
 from langdetect import detect_langs
@@ -21,14 +23,16 @@ def parse_config_ini():
     return config
 
 
-def get_channels() -> list[str]:
+def get_channels() -> dict[str, dict[str, Any]]:
     config = parse_config_ini()
-    return config.get("channels", "names")
+    channels = {}
+    for channel, options in config.items('channels'):
+        channels[channel] = json.loads(options)
+    return channels
 
 
 channels = get_channels()
 print(f"Channels: {channels}")
-
 
 app = Client("tts-feed")
 
@@ -42,12 +46,14 @@ def message_handler(client: Client, message: Message) -> None:
     chat_title = message.chat.title
     if chat_title not in channels:
         return
-    sender, lang, txt = parse(message)
-    play(sender, lang, message.message_id, txt)
+    options: Optional[dict] = channels.get(chat_title, {})
+    if options.get("enabled") is not False:
+        sender, lang, txt = parse(message, options)
+        play(sender, lang, message.message_id, txt)
 
 
-def parse(message: Message) -> (str, str, str):
-    chat_title = deEmojify(message.chat.title)
+def parse(message: Message, options) -> (str, str, str):
+    chat_title = options.get("alias", deEmojify(message.chat.title))
     if message.from_user:
         sender = " ".join(
             [
@@ -80,24 +86,27 @@ def parse(message: Message) -> (str, str, str):
 def deEmojify(text: str) -> str:
     regrex_pattern = re.compile(
         pattern="["
-        "\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map symbols
-        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        "]+",
+                "\U0001F600-\U0001F64F"  # emoticons
+                "\U0001F300-\U0001F5FF"  # symbols & pictographs
+                "\U0001F680-\U0001F6FF"  # transport & map symbols
+                "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                "]+",
         flags=re.UNICODE,
     )
     return regrex_pattern.sub(r"", text).strip()
 
 
 def detect_lang(txt: str) -> str:
-    langs: list[Language] = detect_langs(txt)
+    lang = LANGS_PRIORITY[0]
+    try:
+        langs: list[Language] = detect_langs(txt)
+    except:
+        return lang
+
     print(f"detected langs: {langs}")
     langs = [l for l in langs if l.lang in LANGS_PRIORITY]
     if langs:
         lang = langs[0].lang
-    else:
-        lang = LANGS_PRIORITY[0]
     return lang
 
 

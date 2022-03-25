@@ -1,40 +1,54 @@
+import configparser
 import os
-import sys
-from langdetect import detect, detect_langs
-from langdetect.language import Language
-
-from pyrogram import Client, filters
-from pyrogram.types import Message
 
 from gtts import gTTS
+from langdetect import detect_langs
+from langdetect.language import Language
+from pyrogram import Client, filters
+from pyrogram.types import Message
 
 LANGS_PRIORITY = ["en", "ru", "uk"]
 
 
-def get_channel_name() -> str:
-    if len(sys.argv) > 1:
-        return sys.argv[1]
-    else:
-        raise Exception("Please provide channel name")
+def parse_config_ini():
+    config_ini = os.path.join(os.path.dirname(__file__), "config.ini")
+    if not os.path.exists(config_ini):
+        raise Exception(f"config.ini not found in {config_ini}")
+    config = configparser.ConfigParser()
+    config.read(config_ini)
+    return config
 
 
-CHANNEL_NAME = get_channel_name()
+def get_channels() -> list[str]:
+    config = parse_config_ini()
+    return config.get("channels", "names")
+
+
+channels = get_channels()
+print(f"Channels: {channels}")
+
 
 app = Client("tts-feed")
 
 
 @app.on_message(filters.all)
 def message_handler(client: Client, message: Message) -> None:
-    if message.chat.title != CHANNEL_NAME:
+    chat_title = message.chat.title
+    if chat_title not in channels:
         return
     from_user, lang, txt = parse(message)
     play(from_user, lang, message, txt)
 
 
 def parse(message: Message) -> (str, str, str):
-    from_user = " ".join(
-        [n for n in [message.from_user.first_name, message.from_user.last_name] if n]
-    )
+    chat_title = message.chat.title
+    if message.from_user:
+        from_user = " ".join(
+            [n for n in [message.from_user.first_name, message.from_user.last_name] if n]
+        )
+    else:
+        from_user = "Unknown"
+
     if message.forward_from_chat:
         txt = message.caption or message.text
         lang = detect_lang(txt)
@@ -48,6 +62,7 @@ def parse(message: Message) -> (str, str, str):
         txt = message.text
         lang = detect_lang(txt)
 
+    txt = f"{chat_title}      {txt}"
     return from_user, lang, txt
 
 

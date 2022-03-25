@@ -1,4 +1,5 @@
 import configparser
+import functools
 import os
 import re
 
@@ -42,7 +43,7 @@ def message_handler(client: Client, message: Message) -> None:
     if chat_title not in channels:
         return
     sender, lang, txt = parse(message)
-    play(sender, lang, message, txt)
+    play(sender, lang, message.message_id, txt)
 
 
 def parse(message: Message) -> (str, str, str):
@@ -89,7 +90,7 @@ def deEmojify(text: str) -> str:
     return regrex_pattern.sub(r"", text).strip()
 
 
-def detect_lang(txt):
+def detect_lang(txt: str) -> str:
     langs: list[Language] = detect_langs(txt)
     print(f"detected langs: {langs}")
     langs = [l for l in langs if l.lang in LANGS_PRIORITY]
@@ -100,10 +101,12 @@ def detect_lang(txt):
     return lang
 
 
-def play(sender: str, lang: str, message: Message, txt: str) -> None:
+# deal with duplicates
+@functools.lru_cache(maxsize=256)
+def play(sender: str, lang: str, message_id: int, txt: str) -> None:
     print(f"sender: {sender}, lang: {lang} text: {txt}")
     tts = gTTS(f"{sender}: {txt}", lang=lang)
-    file = f"{message.message_id}.mp3"
+    file = f"{message_id}.mp3"
     tts.save(file)
     os.system(
         f"ffplay -autoexit -nodisp -af atempo=2 -loglevel error {file} && rm {file}"

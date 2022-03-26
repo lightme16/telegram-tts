@@ -3,7 +3,7 @@ import functools
 import json
 import os
 import re
-from typing import Optional, Any
+from typing import Optional, Any, Tuple
 
 from gtts import gTTS
 from langdetect import detect_langs
@@ -26,13 +26,12 @@ def parse_config_ini():
 def get_channels() -> dict[str, dict[str, Any]]:
     config = parse_config_ini()
     channels = {}
-    for channel, options in config.items('channels'):
+    for channel, options in config.items("channels"):
         channels[channel] = json.loads(options)
     return channels
 
 
 channels = get_channels()
-print(f"Channels: {channels}")
 
 app = Client("tts-feed")
 
@@ -43,7 +42,7 @@ def remove_unicode(txt: str) -> str:
 
 @app.on_message(filters.all)
 def message_handler(client: Client, message: Message) -> None:
-    chat_title =  message.chat.title and message.chat.title.lower()
+    chat_title = message.chat.title and message.chat.title.lower()
     user = message.chat.username and message.chat.username.lower()
     if chat_title not in channels and user not in channels:
         return
@@ -53,7 +52,7 @@ def message_handler(client: Client, message: Message) -> None:
         play(sender, lang, message.message_id, txt)
 
 
-def parse(message: Message, options) -> (str, str, str):
+def parse(message: Message, options) -> Tuple[str, str, str]:
     chat_title = options.get("alias", deEmojify(message.chat.title))
     if message.from_user:
         sender = " ".join(
@@ -87,11 +86,11 @@ def parse(message: Message, options) -> (str, str, str):
 def deEmojify(text: str) -> str:
     regrex_pattern = re.compile(
         pattern="["
-                "\U0001F600-\U0001F64F"  # emoticons
-                "\U0001F300-\U0001F5FF"  # symbols & pictographs
-                "\U0001F680-\U0001F6FF"  # transport & map symbols
-                "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                "]+",
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "]+",
         flags=re.UNICODE,
     )
     return regrex_pattern.sub(r"", str(text)).strip()

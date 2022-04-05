@@ -14,10 +14,10 @@ from pyrogram.types import Message
 
 LANGS_PRIORITY = ["en", "ru", "uk", "mk"]
 
-OptionsType = TypedDict('OptionsType', {'enabled': bool, 'alias': str, 'send_audio': bool})
+OptionsType = TypedDict('OptionsType', {'read_aloud': bool, 'alias': str, 'send_audio': bool})
 
 
-def parse_config_ini():
+def parse_config_ini() -> configparser.ConfigParser:
     config_ini = os.path.join(os.path.dirname(__file__), "config.ini")
     if not os.path.exists(config_ini):
         raise Exception(f"config.ini not found in {config_ini}")
@@ -50,7 +50,9 @@ async def message_handler(client: Client, message: Message) -> None:
     if chat_title not in channels and user not in channels:
         return
     options: Optional[OptionsType] = channels.get(chat_title, {})
-    if options is not None and options.get("enabled") is not False:
+    if options is not None and (
+            any(option is True for option in [options.get("read_aloud"), options.get("send_audio")])
+    ):
         await process_text(client, message, options)
 
 
@@ -75,9 +77,9 @@ async def run_cmd(cmd: str) -> None:
 async def process_text(client: Client, message: Message, options: OptionsType):
     sender, lang, txt = parse(message, options)
     file = generate_audiofile(sender, lang, message.message_id, txt)
-    tasks = [
-        play_audio(file),
-    ]
+    tasks = []
+    if options.get("read_aloud") is True:
+        tasks.append(play_audio(file))
     if options.get("send_audio") is True:
         tasks.append(client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id))
     await asyncio.gather(*tasks)

@@ -4,6 +4,7 @@ import functools
 import json
 import os
 import re
+import logging
 from typing import Optional, Tuple, TypedDict
 
 from gtts import gTTS
@@ -15,6 +16,20 @@ from pyrogram.types import Message
 LANGS_PRIORITY = ["en", "ru", "uk", "mk"]
 
 OptionsType = TypedDict('OptionsType', {'read_aloud': bool, 'alias': str, 'send_audio': bool})
+
+
+def init_logger() -> logging.Logger:
+    logger = logging.getLogger("tts")
+    logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler("log.txt")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(file_handler)
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+    return logger
 
 
 def parse_config_ini() -> configparser.ConfigParser:
@@ -34,6 +49,7 @@ def get_channels() -> dict[str, OptionsType]:
     return channels
 
 
+logger = init_logger()
 channels = get_channels()
 
 app = Client("tts-feed")
@@ -48,12 +64,16 @@ async def message_handler(client: Client, message: Message) -> None:
     chat_title = message.chat.title and message.chat.title.lower()
     user = message.chat.username and message.chat.username.lower()
     if chat_title not in channels and user not in channels:
+        logger.warning(f"{message.chat.title} ({message.chat.username}) not in channels")
         return
-    options: Optional[OptionsType] = channels.get(chat_title, {})
+    channel = chat_title or user
+    options: Optional[OptionsType] = channels.get(channel, {})
     if options is not None and (
             any(option is True for option in [options.get("read_aloud"), options.get("send_audio")])
     ):
         await process_text(client, message, options)
+    else:
+        logger.info(f"{message.chat.title} ({message.chat.username}) is not have any options enabled")
 
 
 async def play_audio(file: str) -> None:
@@ -68,10 +88,8 @@ async def run_cmd(cmd: str) -> None:
         stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await process.communicate()
-    if stdout:
-        print(f'[stdout]\n{stdout.decode()}')
     if stderr:
-        print(f'[stderr]\n{stderr.decode()}')
+        logger.error(f'cmd error:\n{stderr.decode()}')
 
 
 async def process_text(client: Client, message: Message, options: OptionsType):
@@ -137,7 +155,7 @@ def detect_lang(txt: str) -> str:
     except:
         return lang
 
-    print(f"detected langs: {langs}")
+    logger.info(f"detected langs: {langs}")
     langs = [l for l in langs if l.lang in LANGS_PRIORITY]
     if langs:
         lang = langs[0].lang
@@ -150,7 +168,7 @@ def detect_lang(txt: str) -> str:
 # deal with duplicates
 @functools.lru_cache(maxsize=256)
 def generate_audiofile(sender: str, lang: str, message_id: int, txt: str) -> str:
-    print(f"sender: {sender}, lang: {lang} text: {txt}")
+    logger.info(f"sender: {sender}, lang: {lang} text: {txt}")
     tts = gTTS(f"{sender}: {txt}", lang=lang)
     file1 = f"{message_id}.ogg"
     tts.save(file1)
@@ -158,3 +176,4 @@ def generate_audiofile(sender: str, lang: str, message_id: int, txt: str) -> str
 
 
 app.run()
+logger.info("app stopped")

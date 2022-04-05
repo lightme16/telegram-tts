@@ -4,7 +4,7 @@ import functools
 import json
 import os
 import re
-from typing import Optional, Any, Tuple
+from typing import Optional, Any, Tuple, TypedDict
 
 from gtts import gTTS
 from langdetect import detect_langs
@@ -13,6 +13,8 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 LANGS_PRIORITY = ["en", "ru", "uk", "mk"]
+
+OptionsType = TypedDict('Options', {'enabled': str, 'alias': str, 'send_audio': str})
 
 
 def parse_config_ini():
@@ -24,9 +26,9 @@ def parse_config_ini():
     return config
 
 
-def get_channels() -> dict[str, dict[str, Any]]:
+def get_channels() -> dict[str, OptionsType]:
     config = parse_config_ini()
-    channels = {}
+    channels: dict[str, OptionsType] = {}
     for channel, options in config.items("channels"):
         channels[channel] = json.loads(options)
     return channels
@@ -47,8 +49,8 @@ async def message_handler(client: Client, message: Message) -> None:
     user = message.chat.username and message.chat.username.lower()
     if chat_title not in channels and user not in channels:
         return
-    options: Optional[dict] = channels.get(chat_title, {})
-    if options.get("enabled") is not False:
+    options: Optional[OptionsType] = channels.get(chat_title, {})
+    if options is not None and options.get("enabled") is not False:
         await process_text(client, message, options)
 
 
@@ -70,17 +72,19 @@ async def run_cmd(cmd: str) -> None:
         print(f'[stderr]\n{stderr.decode()}')
 
 
-async def process_text(client: Client, message: Message, options: Optional[dict]):
+async def process_text(client: Client, message: Message, options: OptionsType):
     sender, lang, txt = parse(message, options)
     file = generate_audiofile(sender, lang, message.message_id, txt)
-    await asyncio.gather(
+    tasks = [
         play_audio(file),
-        client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id)
-    )
+    ]
+    if options.get("send_audio") is True:
+        tasks.append(client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id))
+    await asyncio.gather(*tasks)
     await run_cmd(f"rm {file}")
 
 
-def parse(message: Message, options) -> Tuple[str, str, str]:
+def parse(message: Message, options: OptionsType) -> Tuple[str, str, str]:
     chat_title = options.get("alias", deEmojify(message.chat.title))
     if message.from_user:
         sender = " ".join(

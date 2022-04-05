@@ -48,8 +48,22 @@ def message_handler(client: Client, message: Message) -> None:
         return
     options: Optional[dict] = channels.get(chat_title, {})
     if options.get("enabled") is not False:
-        sender, lang, txt = parse(message, options)
-        play(sender, lang, message.message_id, txt)
+        process_text(client, message, options)
+
+
+def play_audio(file: str) -> None:
+    # os.system(f"ffplay -autoexit -nodisp -loglevel error -")
+    pass
+
+
+def process_text(client: Client, message: Message, options: Optional[dict]):
+    sender, lang, txt = parse(message, options)
+    file = generate_audiofile(sender, lang, message.message_id, txt)
+    play_audio(file)
+    client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id)
+    os.system(
+        f"rm {file}"
+    )
 
 
 def parse(message: Message, options) -> Tuple[str, str, str]:
@@ -86,11 +100,11 @@ def parse(message: Message, options) -> Tuple[str, str, str]:
 def deEmojify(text: str) -> str:
     regrex_pattern = re.compile(
         pattern="["
-        "\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map symbols
-        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        "]+",
+                "\U0001F600-\U0001F64F"  # emoticons
+                "\U0001F300-\U0001F5FF"  # symbols & pictographs
+                "\U0001F680-\U0001F6FF"  # transport & map symbols
+                "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                "]+",
         flags=re.UNICODE,
     )
     return regrex_pattern.sub(r"", str(text)).strip()
@@ -115,14 +129,14 @@ def detect_lang(txt: str) -> str:
 
 # deal with duplicates
 @functools.lru_cache(maxsize=256)
-def play(sender: str, lang: str, message_id: int, txt: str) -> None:
+def generate_audiofile(sender: str, lang: str, message_id: int, txt: str) -> str:
     print(f"sender: {sender}, lang: {lang} text: {txt}")
     tts = gTTS(f"{sender}: {txt}", lang=lang)
-    file = f"{message_id}.mp3"
-    tts.save(file)
-    os.system(
-        f"ffmpeg -loglevel error -i {file} -filter:a 'atempo=2' -f matroska - | ffplay -autoexit -nodisp -loglevel error - && rm {file}"
-    )
+    file1 = f"{message_id}.ogg"
+    tts.save(file1)
+    transform_cmd = f"ffmpeg -loglevel error -i {file1} -filter:a 'atempo=2' -f matroska - | ffplay -autoexit -nodisp -loglevel error - "
+    os.system(transform_cmd)
+    return file1
 
 
 app.run()

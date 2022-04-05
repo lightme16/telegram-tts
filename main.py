@@ -4,7 +4,7 @@ import functools
 import json
 import os
 import re
-from typing import Optional, Any, Tuple, TypedDict
+from typing import Optional, Tuple, TypedDict
 
 from gtts import gTTS
 from langdetect import detect_langs
@@ -14,7 +14,7 @@ from pyrogram.types import Message
 
 LANGS_PRIORITY = ["en", "ru", "uk", "mk"]
 
-OptionsType = TypedDict('Options', {'enabled': str, 'alias': str, 'send_audio': str})
+OptionsType = TypedDict('OptionsType', {'enabled': bool, 'alias': str, 'send_audio': bool})
 
 
 def parse_config_ini():

@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import functools
 import json
@@ -41,29 +42,42 @@ def remove_unicode(txt: str) -> str:
 
 
 @app.on_message(filters.all)
-def message_handler(client: Client, message: Message) -> None:
+async def message_handler(client: Client, message: Message) -> None:
     chat_title = message.chat.title and message.chat.title.lower()
     user = message.chat.username and message.chat.username.lower()
     if chat_title not in channels and user not in channels:
         return
     options: Optional[dict] = channels.get(chat_title, {})
     if options.get("enabled") is not False:
-        process_text(client, message, options)
+        await process_text(client, message, options)
 
 
-def play_audio(file: str) -> None:
-    # os.system(f"ffplay -autoexit -nodisp -loglevel error -")
-    pass
+async def play_audio(file: str) -> None:
+    await run_cmd(
+        f"ffmpeg -loglevel error -i {file} -filter:a 'atempo=2' -f matroska - | ffplay -autoexit -nodisp -loglevel error - ")
 
 
-def process_text(client: Client, message: Message, options: Optional[dict]):
+async def run_cmd(cmd: str) -> None:
+    process = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if stdout:
+        print(f'[stdout]\n{stdout.decode()}')
+    if stderr:
+        print(f'[stderr]\n{stderr.decode()}')
+
+
+async def process_text(client: Client, message: Message, options: Optional[dict]):
     sender, lang, txt = parse(message, options)
     file = generate_audiofile(sender, lang, message.message_id, txt)
-    play_audio(file)
-    client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id)
-    os.system(
-        f"rm {file}"
+    await asyncio.gather(
+        play_audio(file),
+        client.send_audio(message.chat.id, audio=file, reply_to_message_id=message.message_id)
     )
+    await run_cmd(f"rm {file}")
 
 
 def parse(message: Message, options) -> Tuple[str, str, str]:
@@ -134,8 +148,6 @@ def generate_audiofile(sender: str, lang: str, message_id: int, txt: str) -> str
     tts = gTTS(f"{sender}: {txt}", lang=lang)
     file1 = f"{message_id}.ogg"
     tts.save(file1)
-    transform_cmd = f"ffmpeg -loglevel error -i {file1} -filter:a 'atempo=2' -f matroska - | ffplay -autoexit -nodisp -loglevel error - "
-    os.system(transform_cmd)
     return file1
 
 
